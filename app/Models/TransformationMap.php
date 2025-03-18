@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Casts\RulesCast;
 
 class TransformationMap extends Model
 {
@@ -17,6 +18,6 @@ class TransformationMap extends Model
     ];
 
     protected $casts = [
-        'rules' => 'array', // O campo 'rules' será um array
+        'rules' => RulesCast::class,
     ];
 }
