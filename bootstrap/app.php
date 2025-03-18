@@ -6,7 +6,8 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        health: '/up',
+        api: base_path('routes/api.php'),
+        health: '/up'
     )
     ->withMiddleware(function (Middleware $middleware) {
         //
