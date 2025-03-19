@@ -6,45 +6,60 @@ class XmlTransformer implements TransformerInterface
 {
     public function transform(array $data, array $rules, string $templateName): string
     {
-        // Obtém template XML completo e template de linha
-        $templateXml = XmlTemplates::getTemplate($templateName);
-        $rowTemplate = XmlTemplates::getRowTemplate($templateName);
+        // Obtém os templates do XML
+        $templateXml    = XmlTemplates::getTemplate($templateName);
+        $rowTemplate    = XmlTemplates::getRowTemplate($templateName);
         $headerTemplate = XmlTemplates::getHeaderTemplate($templateName);
         $footerTemplate = XmlTemplates::getFooterTemplate($templateName);
 
+        // Processa o header
+        $headerValues = $this->extractValues($rules['header'] ?? [], $data);
+        $headerXml    = $this->replacePlaceholders($headerTemplate, $headerValues);
+
+        // Processa as linhas
         $rowsXml = "";
-
-        foreach ($data as $rowIndex => $row) {
-            $currentRowXml = $rowTemplate;
-
-            foreach ($rules as $rule) {
-                $sourceField = $rule['source_field'] ?? null;
-                $sourceIndex = $rule['source_index'] ?? null;
-                $destinationField = $rule['destination_field'] ?? null;
-                $destinationIndex = $rule['destination_index'] ?? null;
-
-                // Obtém o valor do source_field pelo índice ou nome do campo
-                $value = $sourceIndex !== null && isset($row[$sourceIndex])
-                    ? $row[$sourceIndex]
-                    : ($row[$sourceField] ?? null);
-
-                if ($value !== null) {
-                    $destinationPlaceholder = $destinationIndex !== null
-                        ? "{{{$destinationField}_{$destinationIndex}}}"
-                        : "{{{$destinationField}}}";
-
-                    $currentRowXml = str_replace($destinationPlaceholder, htmlspecialchars($value), $currentRowXml);
-                }
-            }
-
-            $rowsXml .= $currentRowXml . "\n";
+        foreach ($data as $row) {
+            $rowValues  = $this->extractValues($rules['row'] ?? [], $row);
+            $rowsXml   .= $this->replacePlaceholders($rowTemplate, $rowValues) . "\n";
         }
 
-        // Processa cabeçalho, rodapé e o XML final
-        $headerXml = str_replace("{{DataGeracao}}", date('Y-m-d H:i:s'), $headerTemplate);
-        $footerXml = str_replace("{{TotalPedidos}}", count($data), $footerTemplate);
-        $finalXml = str_replace("{{rows}}", $rowsXml, $templateXml);
+        // Processa o footer
+        $footerValues = $this->extractValues($rules['footer'] ?? [], $data);
+        $footerXml    = $this->replacePlaceholders($footerTemplate, $footerValues);
 
-        return $headerXml . "\n" . $finalXml . "\n" . $footerXml;
+        // Substitui os placeholders no template principal
+        $finalXml = $this->replacePlaceholders($templateXml, [
+            'header' => $headerXml,
+            'rows'   => $rowsXml,
+            'footer' => $footerXml,
+        ]);
+
+        return $finalXml;
+    }
+
+    /**
+     * Extrai os valores dos campos com base nas regras definidas
+     */
+    private function extractValues(array $rules, array $data): array
+    {
+        $values = [];
+        foreach ($rules as $rule) {
+            $sourceField      = $rule['source_field'];
+            $destinationField = $rule['destination_field'];
+            $values[$destinationField] = $data[$sourceField] ?? '';
+        }
+        return $values;
+    }
+
+    /**
+     * Substitui automaticamente os placeholders do template
+     */
+    private function replacePlaceholders(string $template, array $values): string
+    {
+        preg_match_all('/{{(.*?)}}/', $template, $matches);
+        foreach ($matches[1] as $placeholder) {
+            $template = str_replace("{{{$placeholder}}}", $values[$placeholder] ?? '', $template);
+        }
+        return $template;
     }
 }

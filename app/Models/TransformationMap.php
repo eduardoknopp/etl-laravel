@@ -15,6 +15,7 @@ class TransformationMap extends Model
         'from_type',
         'to_type',
         'rules',
+        'template',
     ];
 
     protected $casts = [

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\FileUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
 
 class ImportedFileController extends Controller
@@ -26,7 +27,7 @@ class ImportedFileController extends Controller
             Log::warning('No file received in the request');
         }
 
-        $result = $this->fileUploadService->uploadFile($request->file('file'));
+        $result = $this->fileUploadService->uploadFile($request->file('file'), 'upload');
 
         Log::info('Upload result: ' . json_encode($result));
 

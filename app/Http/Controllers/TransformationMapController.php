@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TransformationMap;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 class TransformationMapController extends Controller
 {
