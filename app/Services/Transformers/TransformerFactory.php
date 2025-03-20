@@ -10,6 +10,9 @@ class TransformerFactory
     {
         return match ($toType) {
             'xml' => new XmlTransformer(),
+            'csv' => new CsvTransformer(),
+            'json' => new JsonTransformer(),
+            'xlsx' => new XlsxTransformer(),
             default => throw new InvalidArgumentException("Tipo de transformação '$toType' não suportado."),
         };
     }

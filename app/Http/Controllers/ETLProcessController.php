@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessFileJob;
 use App\Models\ImportedFile;
-use App\Services\FileTransformerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -11,13 +11,6 @@ use Illuminate\Support\Facades\Log;
 
 class ETLProcessController extends Controller
 {
-    protected FileTransformerService $fileTransformerService;
-
-    public function __construct(FileTransformerService $fileTransformerService)
-    {
-        $this->fileTransformerService = $fileTransformerService;
-    }
-
     public function processFile(Request $request, int $fileId): JsonResponse
     {
         Log::info("ETL processing request for file ID: {$fileId}");
@@ -36,9 +29,13 @@ class ETLProcessController extends Controller
             return response()->json(['message' => 'File already processed'], 400);
         }
 
-        // Chamar o serviço para processar o arquivo
-        $result = $this->fileTransformerService->processFile($importedFile);
+        // Enviar para processamento assíncrono
+        ProcessFileJob::dispatch($importedFile);
 
-        return response()->json($result);
+        return response()->json([
+            'message' => 'File queued for processing',
+            'file_id' => $importedFile->id,
+            'status' => 'processing'
+        ]);
     }
 }
