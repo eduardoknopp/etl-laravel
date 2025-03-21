@@ -2,6 +2,10 @@
 
 namespace App\Services\Transformers;
 
+use App\Services\Transformers\Csv\CsvTransformer;
+use App\Services\Transformers\Json\JsonTransformer;
+use App\Services\Transformers\Xml\XmlTransformer;
+use App\Services\Transformers\Xlsx\XlsxTransformer;
 use InvalidArgumentException;
 
 class TransformerFactory

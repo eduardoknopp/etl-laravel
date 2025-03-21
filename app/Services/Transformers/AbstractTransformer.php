@@ -3,12 +3,8 @@
 namespace App\Services\Transformers;
 
 use App\DTOs\TransformationMapRule;
-use Spatie\SimpleExcel\SimpleExcelReader;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-class XlsxTransformer implements TransformerInterface
+abstract class AbstractTransformer implements TransformerInterface
 {
     /**
      * Transforma os dados do arquivo de origem de acordo com as regras de mapeamento
@@ -17,7 +13,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $data Os dados do arquivo origem (geralmente o caminho do arquivo)
      * @param array $rules As regras de transformação
      * @param string $templateName O nome do template a ser usado
-     * @return string Os dados transformados no formato XLSX
+     * @return string Os dados transformados
      */
     public function transform(array $data, array $rules, string $templateName): string
     {
@@ -27,97 +23,149 @@ class XlsxTransformer implements TransformerInterface
             throw new \InvalidArgumentException('Arquivo de origem inválido ou não encontrado');
         }
 
-        // Carregar o template XLSX
-        $template = XlsxTemplates::getTemplate($templateName);
+        $sourceFormat = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $outputFormat = $this->getOutputFormat();
         
-        // Criar um novo spreadsheet
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->getProperties()
-            ->setCreator($template['properties']['creator'] ?? 'Sistema ETL')
-            ->setTitle($template['properties']['title'] ?? 'Arquivo Transformado')
-            ->setDescription($template['properties']['description'] ?? 'Arquivo gerado pelo sistema ETL');
-            
-        // Remover a planilha padrão
-        $spreadsheet->removeSheetByIndex(0);
-        
-        // Ler o arquivo de origem
-        $reader = SimpleExcelReader::create($filePath);
-        $sourceRows = $reader->getRows()->toArray();
-        
-        // Processar cada planilha definida no template
-        $sheetIndex = 0;
-        foreach ($template['sheets'] as $sheetName => $sheetConfig) {
-            // Criar uma nova planilha
-            $sheet = $spreadsheet->createSheet($sheetIndex);
-            $sheet->setTitle($sheetName);
-            
-            // Adicionar cabeçalhos
-            $columnIndex = 1;
-            foreach ($sheetConfig['headers'] as $header) {
-                $sheet->setCellValueByColumnAndRow($columnIndex++, 1, $header);
-            }
-            
-            // Aplicar estilos aos cabeçalhos, se definidos
-            if (isset($sheetConfig['styles']['headers'])) {
-                $headerStyle = $sheet->getStyle('A1:' . $this->getColumnLetter(count($sheetConfig['headers'])) . '1');
-                
-                if (isset($sheetConfig['styles']['headers']['font'])) {
-                    $font = $headerStyle->getFont();
-                    if (isset($sheetConfig['styles']['headers']['font']['bold'])) {
-                        $font->setBold($sheetConfig['styles']['headers']['font']['bold']);
-                    }
-                    if (isset($sheetConfig['styles']['headers']['font']['size'])) {
-                        $font->setSize($sheetConfig['styles']['headers']['font']['size']);
-                    }
-                }
-                
-                if (isset($sheetConfig['styles']['headers']['fill'])) {
-                    $fill = $headerStyle->getFill();
-                    $fill->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                    if (isset($sheetConfig['styles']['headers']['fill']['color'])) {
-                        $fill->getStartColor()->setRGB(ltrim($sheetConfig['styles']['headers']['fill']['color'], '#'));
-                    }
-                }
-                
-                if (isset($sheetConfig['styles']['headers']['font_color'])) {
-                    $font = $headerStyle->getFont();
-                    $font->getColor()->setRGB(ltrim($sheetConfig['styles']['headers']['font_color'], '#'));
-                }
-            }
-            
-            // Processar cada linha de dados
-            $rowIndex = 2; // Começando abaixo do cabeçalho
-            
-            foreach ($sourceRows as $sourceRow) {
-                $columnIndex = 1;
-                
-                // Mapear cada coluna de acordo com as regras
-                foreach ($sheetConfig['headers'] as $targetField) {
-                    $value = $this->getValueFromRules($rules, $targetField, $sourceRow);
-                    $sheet->setCellValueByColumnAndRow($columnIndex++, $rowIndex, $value);
-                }
-                
-                $rowIndex++;
-            }
-            
-            // Ajustar largura das colunas
-            foreach (range('A', $this->getColumnLetter(count($sheetConfig['headers']))) as $column) {
-                $sheet->getColumnDimension($column)->setAutoSize(true);
-            }
-            
-            $sheetIndex++;
-        }
-        
-        // Salvar para o buffer de saída
-        $writer = new Xlsx($spreadsheet);
-        ob_start();
-        $writer->save('php://output');
-        $content = ob_get_contents();
-        ob_end_clean();
-        
-        return $content;
+        // Direcionar para o método de transformação específico baseado no formato de origem
+        return match ($sourceFormat) {
+            $outputFormat => $this->transformSameFormat($data, $rules, $templateName),
+            'json' => $this->transformJsonToFormat($data, $rules, $templateName),
+            'xml' => $this->transformXmlToFormat($data, $rules, $templateName),
+            'csv' => $this->transformCsvToFormat($data, $rules, $templateName),
+            'xlsx', 'xls' => $this->transformXlsxToFormat($data, $rules, $templateName),
+            default => throw new \InvalidArgumentException("Transformação de '$sourceFormat' para '$outputFormat' não suportada"),
+        };
     }
     
+    /**
+     * Retorna o formato de saída do transformador
+     *
+     * @return string O formato de saída (json, xml, csv, xlsx)
+     */
+    abstract protected function getOutputFormat(): string;
+    
+    /**
+     * Transforma um arquivo do mesmo formato para o mesmo formato
+     *
+     * @param array $data Os dados do arquivo origem
+     * @param array $rules As regras de transformação
+     * @param string $templateName O nome do template a ser usado
+     * @return string Os dados transformados
+     */
+    abstract protected function transformSameFormat(array $data, array $rules, string $templateName): string;
+    
+    /**
+     * Transforma um arquivo JSON para o formato de saída
+     *
+     * @param array $data Os dados do arquivo origem
+     * @param array $rules As regras de transformação
+     * @param string $templateName O nome do template a ser usado
+     * @return string Os dados transformados
+     */
+    abstract protected function transformJsonToFormat(array $data, array $rules, string $templateName): string;
+    
+    /**
+     * Transforma um arquivo XML para o formato de saída
+     *
+     * @param array $data Os dados do arquivo origem
+     * @param array $rules As regras de transformação
+     * @param string $templateName O nome do template a ser usado
+     * @return string Os dados transformados
+     */
+    abstract protected function transformXmlToFormat(array $data, array $rules, string $templateName): string;
+    
+    /**
+     * Transforma um arquivo CSV para o formato de saída
+     *
+     * @param array $data Os dados do arquivo origem
+     * @param array $rules As regras de transformação
+     * @param string $templateName O nome do template a ser usado
+     * @return string Os dados transformados
+     */
+    abstract protected function transformCsvToFormat(array $data, array $rules, string $templateName): string;
+    
+    /**
+     * Transforma um arquivo XLSX para o formato de saída
+     *
+     * @param array $data Os dados do arquivo origem
+     * @param array $rules As regras de transformação
+     * @param string $templateName O nome do template a ser usado
+     * @return string Os dados transformados
+     */
+    abstract protected function transformXlsxToFormat(array $data, array $rules, string $templateName): string;
+    
+    /**
+     * Aplica estilos aos cabeçalhos de uma planilha
+     *
+     * @param mixed $headerStyle O estilo a ser aplicado
+     * @param array $styles Configuração de estilos
+     * @return void
+     */
+    protected function applyHeaderStyles($headerStyle, array $styles): void
+    {
+        if (isset($styles['font'])) {
+            $font = $headerStyle->getFont();
+            if (isset($styles['font']['bold'])) {
+                $font->setBold($styles['font']['bold']);
+            }
+            if (isset($styles['font']['size'])) {
+                $font->setSize($styles['font']['size']);
+            }
+        }
+        
+        if (isset($styles['fill'])) {
+            $fill = $headerStyle->getFill();
+            $fill->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+            if (isset($styles['fill']['color'])) {
+                $fill->getStartColor()->setRGB(ltrim($styles['fill']['color'], '#'));
+            }
+        }
+        
+        if (isset($styles['font_color'])) {
+            $font = $headerStyle->getFont();
+            $font->getColor()->setRGB(ltrim($styles['font_color'], '#'));
+        }
+    }
+
+    /**
+     * Converte um objeto SimpleXMLElement para array
+     * 
+     * @param \SimpleXMLElement $xml O objeto XML a ser convertido
+     * @return array O array resultante
+     */
+    protected function xmlToArray(\SimpleXMLElement $xml): array
+    {
+        $result = [];
+        
+        // Determinar a estrutura do XML para extrair os dados
+        // Tenta identificar o elemento que contém as linhas de dados
+        $rootNode = $xml->getName();
+        
+        // Se for um documento XML simples com um elemento raiz contendo itens
+        if (count($xml->children()) > 0) {
+            $children = $xml->children();
+            $childName = $children[0]->getName();
+            $items = $xml->{$childName};
+            
+            foreach ($items as $item) {
+                $row = [];
+                foreach ($item as $key => $value) {
+                    $row[(string)$key] = (string)$value;
+                }
+                $result[] = $row;
+            }
+        } else {
+            // Se for um documento XML sem uma estrutura clara, tenta extrair os dados diretamente
+            $row = [];
+            foreach ($xml as $key => $value) {
+                $row[(string)$key] = (string)$value;
+            }
+            $result[] = $row;
+        }
+        
+        return $result;
+    }
+
     /**
      * Obtém um valor para um campo de destino com base nas regras de transformação
      *
@@ -126,7 +174,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return mixed O valor transformado
      */
-    private function getValueFromRules(array $rules, string $targetField, array $sourceRow)
+    protected function getValueFromRules(array $rules, string $targetField, array $sourceRow)
     {
         // Procurar nas regras de mapeamento
         if (isset($rules['mappings']) && is_array($rules['mappings'])) {
@@ -148,7 +196,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return mixed O valor transformado
      */
-    private function applyRule(TransformationMapRule $rule, array $sourceRow)
+    protected function applyRule(TransformationMapRule $rule, array $sourceRow)
     {
         switch ($rule->type) {
             case TransformationMapRule::TYPE_FIELD_MAPPING:
@@ -186,7 +234,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return mixed O valor do campo de origem
      */
-    private function getSourceValue(TransformationMapRule $rule, array $sourceRow)
+    protected function getSourceValue(TransformationMapRule $rule, array $sourceRow)
     {
         // Se tiver índice de origem específico
         if ($rule->sourceIndex !== null && isset($sourceRow[$rule->sourceIndex])) {
@@ -213,7 +261,7 @@ class XlsxTransformer implements TransformerInterface
      * @param string $path O caminho para o valor usando notação de ponto
      * @return mixed O valor encontrado ou null se não existir
      */
-    private function getNestedValue(array $array, string $path)
+    protected function getNestedValue(array $array, string $path)
     {
         $keys = explode('.', $path);
         $value = $array;
@@ -236,7 +284,7 @@ class XlsxTransformer implements TransformerInterface
      * @param string|null $valueFormat O formato de dados
      * @return mixed O valor formatado
      */
-    private function formatValue($value, ?string $format, ?string $valueFormat)
+    protected function formatValue($value, ?string $format, ?string $valueFormat)
     {
         if ($value === null) {
             return '';
@@ -267,7 +315,7 @@ class XlsxTransformer implements TransformerInterface
      * @param string|null $format O formato de data desejado
      * @return string A data formatada
      */
-    private function formatDate($value, ?string $format)
+    protected function formatDate($value, ?string $format)
     {
         if ($value === null) {
             return '';
@@ -295,7 +343,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return mixed O resultado da fórmula
      */
-    private function processFormula(TransformationMapRule $rule, array $sourceRow)
+    protected function processFormula(TransformationMapRule $rule, array $sourceRow)
     {
         // Implementação básica - pode ser expandida para suportar fórmulas mais complexas
         if (!isset($rule->options['formula'])) {
@@ -332,7 +380,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return string O resultado da concatenação
      */
-    private function processConcat(TransformationMapRule $rule, array $sourceRow)
+    protected function processConcat(TransformationMapRule $rule, array $sourceRow)
     {
         if (!isset($rule->options['fields']) || !is_array($rule->options['fields'])) {
             return '';
@@ -358,7 +406,7 @@ class XlsxTransformer implements TransformerInterface
      * @param array $sourceRow Os dados da linha de origem
      * @return mixed O valor resultante da condição
      */
-    private function processConditional(TransformationMapRule $rule, array $sourceRow)
+    protected function processConditional(TransformationMapRule $rule, array $sourceRow)
     {
         if (!isset($rule->options['conditions']) || !is_array($rule->options['conditions'])) {
             return $rule->options['default'] ?? '';
@@ -387,14 +435,14 @@ class XlsxTransformer implements TransformerInterface
         
         return $rule->options['default'] ?? '';
     }
-    
+
     /**
      * Converte um número de coluna para uma letra (A, B, C, ..., AA, AB, ...)
      *
      * @param int $columnNumber O número da coluna (começando em 1)
      * @return string A letra da coluna
      */
-    private function getColumnLetter(int $columnNumber): string
+    protected function getColumnLetter(int $columnNumber): string
     {
         $columnString = '';
         

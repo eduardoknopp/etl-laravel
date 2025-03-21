@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Transformers;
+namespace App\Services\Transformers\Csv;
 
 class CsvTemplates
 {
