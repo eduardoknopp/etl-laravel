@@ -10,7 +10,20 @@ class ImportedFile extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['filename', 'path', 'type', 'status', 'source'];
+    protected $fillable = [
+        'filename', 
+        'original_filename',
+        'path', 
+        'status', 
+        'source',
+        'size',
+        'mime_type',
+        'metadata'
+    ];
+
+    protected $casts = [
+        'metadata' => 'array',
+    ];
 
     public function etlProcesses(): HasMany
     {

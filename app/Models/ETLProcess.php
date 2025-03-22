@@ -9,6 +9,8 @@ class ETLProcess extends Model
 {
     use HasFactory;
 
+    protected $table = 'etl_processes';
+
     protected $fillable = [
         'file_id',
         'map_id',

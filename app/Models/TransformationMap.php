@@ -18,6 +18,7 @@ class TransformationMap extends Model
 
     protected $fillable = [
         'name',
+        'description',
         'from_type',
         'to_type',
         'rules',
