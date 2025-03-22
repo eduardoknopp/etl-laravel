@@ -11,8 +11,8 @@ class CreateTransformationMapsTable extends Migration
         Schema::create('transformation_maps', function (Blueprint $table) {
             $table->id();
             $table->string('name'); // Nome do mapa (ex: "XML para XLS")
-            $table->enum('from_type', ['xml', 'xls', 'csv', 'json']); // Tipo de arquivo de origem
-            $table->enum('to_type', ['xml', 'xls', 'csv', 'json']); // Tipo de arquivo de destino
+            $table->enum('from_type', ['xml', 'xls', 'xlsx', 'csv', 'json']); // Tipo de arquivo de origem
+            $table->enum('to_type', ['xml', 'xls', 'xlsx', 'csv', 'json']); // Tipo de arquivo de destino
             $table->json('rules'); // Regras de transformação (um JSON com campos e mapeamento)
             $table->timestamps();
         });
